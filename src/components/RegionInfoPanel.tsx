@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRegions } from '@/hooks/useGameState';
 import { worldMapData } from '@/data/worldMap';
+import { enhancedWorldMapData, countryResources } from '@/data/worldMapData';
 import { RegionInfluence } from '@/types/gameState';
 
 interface RegionInfoPanelProps {
@@ -19,7 +20,7 @@ const RegionInfoPanel: React.FC<RegionInfoPanelProps> = ({ regionId, onClose }) 
   const { region, addRegionInfluence, setRegionRelationLevel, investInRegion } = useRegions(regionId || undefined);
   
   // 지역 기본 정보 찾기
-  const regionData = regionId ? worldMapData.features.find(f => f.id === regionId) : null;
+  const regionData = regionId ? enhancedWorldMapData.features.find(f => f.id === regionId) : null;
   
   // 투자 금액 상태
   const [investmentAmount, setInvestmentAmount] = useState<number>(1000);
@@ -71,6 +72,9 @@ const RegionInfoPanel: React.FC<RegionInfoPanelProps> = ({ regionId, onClose }) 
       default: return '알 수 없음';
     }
   };
+  
+  // 지역 자원 가져오기
+  const resources = regionId && countryResources[regionId as keyof typeof countryResources] || [];
   
   return (
     <div 
@@ -184,10 +188,21 @@ const RegionInfoPanel: React.FC<RegionInfoPanelProps> = ({ regionId, onClose }) 
         </p>
       </div>
       
-      {/* 지역 자원 섹션 (향후 구현) */}
+      {/* 지역 자원 섹션 */}
       <div className="mb-4">
         <h3 className="text-lg font-semibold mb-2">지역 자원</h3>
-        <p className="text-gray-500 italic">향후 업데이트될 예정입니다.</p>
+        {resources.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            {resources.map((resource, index) => (
+              <div key={index} className="bg-gray-100 p-2 rounded-md flex items-center">
+                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                {resource}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500 italic">자원 데이터가 없습니다.</p>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { MapRenderer } from '@/systems/MapRenderer';
 import { worldMapData } from '@/data/worldMap';
+import { enhancedWorldMapData } from '@/data/worldMapData';
 import RegionInfoPanel from './RegionInfoPanel';
 import { useRegions } from '@/hooks/useGameState';
 
@@ -34,7 +35,7 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height, className }) => {
     const colors: { [key: string]: { color: string } } = {};
     
     // 기본 색상 설정
-    worldMapData.features.forEach(feature => {
+    enhancedWorldMapData.features.forEach(feature => {
       colors[feature.id] = { color: '#d8d8d8' }; // 기본 회색
     });
     
@@ -60,7 +61,7 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height, className }) => {
     // 맵 렌더러 생성
     rendererRef.current = new MapRenderer(
       canvasRef.current,
-      worldMapData,
+      enhancedWorldMapData,
       {
         width,
         height,
