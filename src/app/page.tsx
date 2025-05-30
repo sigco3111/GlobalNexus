@@ -10,11 +10,26 @@ const GameStateTest = dynamic(() => import('@/components/GameStateTest'), {
   ssr: false,
 });
 
+const WorldMap = dynamic(() => import('@/components/WorldMap'), {
+  ssr: false,
+});
+
 export default function Home() {
   return (
     <main className="container mx-auto py-8">
       <h1 className="text-3xl font-bold text-center mb-8">Global Nexus</h1>
-      <GameStateTest />
+      
+      {/* 지도 섹션 */}
+      <div className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4">세계 지도</h2>
+        <WorldMap width={1000} height={600} className="border rounded shadow-lg" />
+      </div>
+      
+      {/* 게임 상태 테스트 섹션 */}
+      <div className="mt-10">
+        <h2 className="text-2xl font-semibold mb-4">게임 상태 테스트</h2>
+        <GameStateTest />
+      </div>
     </main>
   );
 } 
