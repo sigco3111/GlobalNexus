@@ -6,8 +6,8 @@
  */
 import React, { useRef, useEffect, useState } from 'react';
 import { MapRenderer } from '@/systems/MapRenderer';
-import { worldMapData } from '@/data/worldMap';
-import { enhancedWorldMapData } from '@/data/worldMapData';
+import { WorldMapData } from '@/data/worldMap';
+import { useWorldMapData } from '@/data/worldMapLoader';
 import RegionInfoPanel from './RegionInfoPanel';
 import { useRegions } from '@/hooks/useGameState';
 
@@ -30,12 +30,17 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height, className }) => {
   // 지역 데이터 및 액션 가져오기
   const { regions } = useRegions();
   
+  // 세계 지도 데이터 로딩
+  const { worldData, isLoading, error } = useWorldMapData();
+  
   // 지역별 색상 데이터 생성
   const getRegionColors = () => {
+    if (!worldData) return {};
+    
     const colors: { [key: string]: { color: string } } = {};
     
     // 기본 색상 설정
-    enhancedWorldMapData.features.forEach(feature => {
+    worldData.features.forEach(feature => {
       colors[feature.id] = { color: '#d8d8d8' }; // 기본 회색
     });
     
@@ -56,12 +61,12 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height, className }) => {
   
   // 지도 초기화 및 이벤트 리스너 설정
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !worldData) return;
     
     // 맵 렌더러 생성
     rendererRef.current = new MapRenderer(
       canvasRef.current,
-      enhancedWorldMapData,
+      worldData,
       {
         width,
         height,
@@ -71,6 +76,9 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height, className }) => {
         selectedRegionId
       }
     );
+    
+    // 초기 렌더링
+    rendererRef.current.render();
     
     // 지역 클릭 이벤트 리스너
     const handleRegionClick = (e: Event) => {
@@ -87,7 +95,7 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height, className }) => {
         canvasRef.current.removeEventListener('regionClick', handleRegionClick);
       }
     };
-  }, [width, height]);
+  }, [width, height, worldData]);
   
   // 선택된 지역 또는 영향력 변경 시 지도 업데이트
   useEffect(() => {
@@ -97,7 +105,7 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height, className }) => {
         selectedRegionId
       });
     }
-  }, [selectedRegionId, regions]);
+  }, [selectedRegionId, regions, worldData]);
   
   // 지역 정보 패널 닫기
   const handleClosePanel = () => {
@@ -106,18 +114,30 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height, className }) => {
   
   return (
     <div className={`relative ${className || ''}`}>
-      <canvas 
-        ref={canvasRef}
-        width={width}
-        height={height}
-        className="cursor-pointer"
-      />
+      {isLoading ? (
+        <div className="flex items-center justify-center w-full h-full">
+          <div className="text-xl text-gray-600">지도 데이터 로딩 중...</div>
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-center w-full h-full">
+          <div className="text-xl text-red-600">{error}</div>
+        </div>
+      ) : (
+        <canvas 
+          ref={canvasRef}
+          width={width}
+          height={height}
+          className="cursor-pointer"
+        />
+      )}
       
       {/* 지역 정보 패널 */}
-      <RegionInfoPanel 
-        regionId={selectedRegionId}
-        onClose={handleClosePanel}
-      />
+      {selectedRegionId && (
+        <RegionInfoPanel 
+          regionId={selectedRegionId}
+          onClose={handleClosePanel}
+        />
+      )}
     </div>
   );
 };

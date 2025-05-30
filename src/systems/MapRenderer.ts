@@ -1,9 +1,11 @@
+'use client';
+
 /**
  * 맵 렌더링 시스템
  * D3.js를 사용하여 세계 지도를 Canvas에 렌더링합니다.
  */
 import * as d3 from 'd3';
-import { geoPath, geoMercator } from 'd3-geo';
+import { geoPath, geoMercator, GeoPermissibleObjects } from 'd3-geo';
 import { WorldMapData, WorldMapFeature } from '@/data/worldMap';
 
 export interface MapRendererOptions {
@@ -21,8 +23,8 @@ export class MapRenderer {
   private context: CanvasRenderingContext2D;
   private worldData: WorldMapData;
   private options: MapRendererOptions;
-  private projection: d3.GeoProjection;
-  private pathGenerator: d3.GeoPath<any, d3.GeoPermissibleObjects>;
+  private projection!: d3.GeoProjection;
+  private path!: d3.GeoPath<any, any>;
   private isDragging: boolean = false;
   private dragStart: [number, number] | null = null;
   private zoomLevel: number = 1;
@@ -79,7 +81,7 @@ export class MapRenderer {
     this.context.lineWidth = 0.5;
     this.worldData.features.forEach(feature => {
       this.context.beginPath();
-      this.pathGenerator(feature.geometry);
+      this.path(feature.geometry as any);
       this.context.stroke();
     });
   }
@@ -110,7 +112,7 @@ export class MapRenderer {
     
     // 지역 채우기
     this.context.beginPath();
-    this.pathGenerator(feature.geometry);
+    this.path(feature.geometry as any);
     this.context.fillStyle = fillColor;
     this.context.fill();
   }
@@ -201,38 +203,48 @@ export class MapRenderer {
       }
     });
     
-    // 마우스 드래그 시작
+    // 마우스 다운 (드래그 시작)
     this.canvas.addEventListener('mousedown', (event) => {
+      const [x, y] = this.getMousePosition(event);
       this.isDragging = true;
-      this.dragStart = this.getMousePosition(event);
+      this.dragStart = [x, y];
     });
     
-    // 마우스 드래그 종료
-    window.addEventListener('mouseup', () => {
+    // 마우스 업 (드래그 종료)
+    this.canvas.addEventListener('mouseup', () => {
       this.isDragging = false;
       this.dragStart = null;
     });
     
-    // 줌 이벤트
+    // 마우스 아웃 (드래그 종료)
+    this.canvas.addEventListener('mouseout', () => {
+      this.isDragging = false;
+      this.dragStart = null;
+    });
+    
+    // 마우스 휠 (줌)
     this.canvas.addEventListener('wheel', (event) => {
       event.preventDefault();
       
-      const direction = event.deltaY < 0 ? 1 : -1;
-      const factor = 0.1;
-      const zoom = 1 + factor * direction;
+      const delta = event.deltaY < 0 ? 1.1 : 0.9;
+      this.zoomLevel *= delta;
       
-      this.zoomLevel *= zoom;
-      this.zoomLevel = Math.max(0.5, Math.min(this.zoomLevel, 5)); // 줌 레벨 제한
+      // 줌 레벨 제한
+      this.zoomLevel = Math.max(0.5, Math.min(this.zoomLevel, 5));
       
-      this.projection.scale(this.options.scale! * this.zoomLevel);
-      this.render();
+      // 스케일 조정
+      const currentScale = this.projection.scale();
+      if (currentScale) {
+        this.projection.scale(currentScale * delta);
+        this.render();
+      }
     });
   }
-
+  
   /**
-   * 마우스 위치 계산 함수
+   * 마우스 위치 가져오기
    * @param event 마우스 이벤트
-   * @returns [x, y] 좌표
+   * @returns 캔버스 내 마우스 위치 [x, y]
    */
   private getMousePosition(event: MouseEvent): [number, number] {
     const rect = this.canvas.getBoundingClientRect();
@@ -241,71 +253,75 @@ export class MapRenderer {
       event.clientY - rect.top
     ];
   }
-
+  
   /**
-   * 특정 좌표에 있는 지역 찾기
+   * 주어진 좌표에 있는 지역 가져오기
    * @param x X 좌표
    * @param y Y 좌표
-   * @returns 지역 객체 또는 null
+   * @returns 지역 데이터 또는 null
    */
   private getRegionAtPoint(x: number, y: number): WorldMapFeature | null {
-    // 투영 역변환으로 위도/경도 계산
-    const lonLat = this.projection.invert!([x, y]);
+    // 역 투영으로 위경도 가져오기
+    const lonLat = this.projection.invert?.([x, y]);
     if (!lonLat) return null;
     
-    // 해당 위치의 지역 찾기
+    // 각 지역을 검사하여 포함 여부 확인
     for (const feature of this.worldData.features) {
-      // d3의 geoContains를 이용해 포인트가 지역 내부에 있는지 확인
-      if (d3.geoContains(feature as any, lonLat)) {
+      this.context.beginPath();
+      this.path(feature.geometry as any);
+      
+      if (this.context.isPointInPath(x, y)) {
         return feature;
       }
     }
     
     return null;
   }
-
+  
   /**
-   * 렌더러 옵션 업데이트
-   * @param options 업데이트할 옵션
+   * 렌더링 옵션 업데이트
+   * @param options 새 옵션 (부분적으로 제공 가능)
    */
   updateOptions(options: Partial<MapRendererOptions>) {
-    this.options = { ...this.options, ...options };
+    this.options = {
+      ...this.options,
+      ...options,
+    };
     
-    if (options.width || options.height) {
-      this.canvas.width = this.options.width;
-      this.canvas.height = this.options.height;
-      this.projection.translate([this.options.width / 2, this.options.height / 2]);
-    }
-    
+    // 필요한 경우 투영 중심 업데이트
     if (options.center) {
-      this.projection.center(this.options.center);
+      this.projection.center(options.center);
     }
     
+    // 필요한 경우 스케일 업데이트
     if (options.scale) {
-      this.projection.scale(this.options.scale * this.zoomLevel);
+      this.projection.scale(options.scale);
     }
     
+    // 변경사항 렌더링
     this.render();
   }
-
+  
   /**
-   * 선택된 지역 설정
-   * @param regionId 지역 ID
+   * 지역 선택
+   * @param regionId 선택할 지역 ID 또는 null (선택 해제)
    */
   selectRegion(regionId: string | null) {
     this.options.selectedRegionId = regionId;
     this.render();
   }
-
-  // 지도 투영 초기화
+  
+  /**
+   * 지도 투영 초기화
+   */
   private initProjection(): void {
     // 지도 투영 설정
     this.projection = geoMercator()
       .center(this.options.center || [0, 0]) // 기본값 제공
-      .scale(this.options.scale)
+      .scale(this.options.scale || 150)
       .translate([this.options.width / 2, this.options.height / 2]);
     
     // 지도 경로 생성기 설정
-    this.pathGenerator = geoPath().projection(this.projection).context(this.context);
+    this.path = geoPath().projection(this.projection).context(this.context);
   }
 } 
